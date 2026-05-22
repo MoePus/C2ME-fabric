@@ -1,6 +1,7 @@
 package com.ishland.c2me.opts.dfc.common.ast.misc;
 
 import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+import com.ishland.c2me.opts.dfc.common.ast.IInlineableAstNode;
 import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
 import com.ishland.c2me.opts.dfc.common.ast.EvalType;
 import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
@@ -11,7 +12,7 @@ import org.objectweb.asm.commons.InstructionAdapter;
 
 import java.util.Objects;
 
-public class YClampedGradientNode implements AstNode {
+public class YClampedGradientNode implements AstNode, IInlineableAstNode {
 
     private final double fromY;
     private final double toY;
@@ -48,7 +49,7 @@ public class YClampedGradientNode implements AstNode {
     }
 
     @Override
-    public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
+    public void emitValueSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
         m.load(2, Type.INT_TYPE);
         m.cast(Type.INT_TYPE, Type.DOUBLE_TYPE);
         m.dconst(this.fromY);
@@ -61,6 +62,11 @@ public class YClampedGradientNode implements AstNode {
                 "(DDDDD)D",
                 false
         );
+    }
+
+    @Override
+    public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
+        emitValueSingle(context, m, localVarConsumer);
         m.areturn(Type.DOUBLE_TYPE);
     }
 

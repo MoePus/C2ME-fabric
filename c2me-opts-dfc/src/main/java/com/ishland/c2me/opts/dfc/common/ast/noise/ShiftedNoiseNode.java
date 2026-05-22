@@ -30,6 +30,30 @@ public class ShiftedNoiseNode implements AstNode {
         this.noise = Objects.requireNonNull(noise);
     }
 
+    public AstNode getShiftX() {
+        return shiftX;
+    }
+
+    public AstNode getShiftY() {
+        return shiftY;
+    }
+
+    public AstNode getShiftZ() {
+        return shiftZ;
+    }
+
+    public double getXzScale() {
+        return xzScale;
+    }
+
+    public double getYScale() {
+        return yScale;
+    }
+
+    public Noise getNoise() {
+        return noise;
+    }
+
     @Override
     public double evalSingle(int x, int y, int z, EvalType type) {
         double d = x * this.xzScale + this.shiftX.evalSingle(x, y, z, type);
@@ -76,10 +100,6 @@ public class ShiftedNoiseNode implements AstNode {
     public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
         String noiseField = context.newField(Noise.class, this.noise);
 
-        String shiftXMethod = context.newSingleMethod(this.shiftX);
-        String shiftYMethod = context.newSingleMethod(this.shiftY);
-        String shiftZMethod = context.newSingleMethod(this.shiftZ);
-
         m.load(0, InstructionAdapter.OBJECT_TYPE);
         m.getfield(context.className, noiseField, Type.getDescriptor(Noise.class));
 
@@ -87,21 +107,21 @@ public class ShiftedNoiseNode implements AstNode {
         m.cast(Type.INT_TYPE, Type.DOUBLE_TYPE);
         m.dconst(this.xzScale);
         m.mul(Type.DOUBLE_TYPE);
-        context.callDelegateSingle(m, shiftXMethod);
+        operandCallByteCodeGen(this.shiftX, context, m, localVarConsumer);
         m.add(Type.DOUBLE_TYPE);
 
         m.load(2, Type.INT_TYPE);
         m.cast(Type.INT_TYPE, Type.DOUBLE_TYPE);
         m.dconst(this.yScale);
         m.mul(Type.DOUBLE_TYPE);
-        context.callDelegateSingle(m, shiftYMethod);
+        operandCallByteCodeGen(this.shiftY, context, m, localVarConsumer);
         m.add(Type.DOUBLE_TYPE);
 
         m.load(3, Type.INT_TYPE);
         m.cast(Type.INT_TYPE, Type.DOUBLE_TYPE);
         m.dconst(this.xzScale);
         m.mul(Type.DOUBLE_TYPE);
-        context.callDelegateSingle(m, shiftZMethod);
+        operandCallByteCodeGen(this.shiftZ, context, m, localVarConsumer);
         m.add(Type.DOUBLE_TYPE);
 
         m.invokevirtual(

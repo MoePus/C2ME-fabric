@@ -1,6 +1,7 @@
 package com.ishland.c2me.opts.dfc.common.ast;
 
 import com.ishland.c2me.opts.dfc.common.ast.opt.AlgebraicSimplification;
+import com.ishland.c2me.opts.dfc.common.ast.opt.CacheLikeOptimizer;
 import com.ishland.c2me.opts.dfc.common.ast.opt.ConstantFolding;
 import com.ishland.c2me.opts.dfc.common.ast.opt.IdentityElimination;
 import com.ishland.c2me.opts.dfc.common.ast.opt.RangeChoicePruning;
@@ -26,6 +27,6 @@ public final class AstOptimizer {
             node = RangeChoicePruning.optimize(node);
             iterations++;
         } while (prev != node && iterations < MAX_ITERATIONS);
-        return node;
+        return CacheLikeOptimizer.optimize(node);
     }
 }

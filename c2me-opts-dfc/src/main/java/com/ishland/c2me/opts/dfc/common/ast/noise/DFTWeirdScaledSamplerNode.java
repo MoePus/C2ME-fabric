@@ -26,6 +26,18 @@ public class DFTWeirdScaledSamplerNode implements AstNode {
         this.mapper = Objects.requireNonNull(mapper);
     }
 
+    public AstNode getInput() {
+        return input;
+    }
+
+    public DensityFunction.Noise getNoise() {
+        return noise;
+    }
+
+    public DensityFunctionTypes.WeirdScaledSampler.RarityValueMapper getMapper() {
+        return mapper;
+    }
+
     @Override
     public double evalSingle(int x, int y, int z, EvalType type) {
         double v = this.input.evalSingle(x, y, z, type);
@@ -59,11 +71,10 @@ public class DFTWeirdScaledSamplerNode implements AstNode {
 
     @Override
     public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
-        String inputMethod = context.newSingleMethod(this.input);
         String noiseField = context.newField(DensityFunction.Noise.class, this.noise);
         int scale = localVarConsumer.createLocalVariable("scale", Type.DOUBLE_TYPE.getDescriptor());
 
-        context.callDelegateSingle(m, inputMethod);
+        operandCallByteCodeGen(this.input, context, m, localVarConsumer);
 
         switch (this.mapper) {
             case TYPE1 -> m.invokestatic(

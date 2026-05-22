@@ -3,6 +3,7 @@ package com.ishland.c2me.opts.dfc.common.ast.binary;
 import com.ishland.c2me.opts.dfc.common.ast.AstNode;
 import com.ishland.c2me.opts.dfc.common.ast.IInlineableAstNode;
 import com.ishland.c2me.opts.dfc.common.ast.EvalType;
+import com.ishland.c2me.opts.dfc.common.ast.misc.ConstantNode;
 import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
@@ -35,6 +36,13 @@ public class MulNode extends AbstractBinaryNode implements IInlineableAstNode {
 
     @Override
     public void emitValueSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
+        if (this.right instanceof ConstantNode constant) {
+            operandCallByteCodeGen(this.left, context, m, localVarConsumer);
+            m.dconst(constant.getValue());
+            m.mul(Type.DOUBLE_TYPE);
+            return;
+        }
+
         Label notZero = new Label();
         Label end = new Label();
 

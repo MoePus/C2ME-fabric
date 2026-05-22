@@ -56,8 +56,8 @@ public class SqueezeNode extends AbstractUnaryNode implements IInlineableAstNode
         m.store(v, Type.DOUBLE_TYPE);
 
         m.load(v, Type.DOUBLE_TYPE);
-        m.dconst(2.0);
-        m.div(Type.DOUBLE_TYPE);
+        m.dconst(0.5);
+        m.mul(Type.DOUBLE_TYPE);
 
         m.load(v, Type.DOUBLE_TYPE);
         m.dup2();

@@ -16,6 +16,10 @@ public class MinShortNode extends AbstractBinaryNode {
         this.rightMin = rightMin;
     }
 
+    public double getRightMin() {
+        return rightMin;
+    }
+
     @Override
     protected AstNode newInstance(AstNode left, AstNode right) {
         return new MinShortNode(left, right, this.rightMin);
@@ -37,12 +41,9 @@ public class MinShortNode extends AbstractBinaryNode {
 
     @Override
     public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
-        String leftMethod = context.newSingleMethod(this.left);
-        String rightMethod = context.newSingleMethod(this.right);
-
         Label minLabel = new Label();
 
-        context.callDelegateSingle(m, leftMethod);
+        operandCallByteCodeGen(this.left, context, m, localVarConsumer);
         m.dup2();
         m.dconst(this.rightMin);
         m.cmpg(Type.DOUBLE_TYPE);
@@ -50,7 +51,7 @@ public class MinShortNode extends AbstractBinaryNode {
         m.areturn(Type.DOUBLE_TYPE);
 
         m.visitLabel(minLabel);
-        context.callDelegateSingle(m, rightMethod);
+        operandCallByteCodeGen(this.right, context, m, localVarConsumer);
         m.invokestatic(
                 Type.getInternalName(Math.class),
                 "min",

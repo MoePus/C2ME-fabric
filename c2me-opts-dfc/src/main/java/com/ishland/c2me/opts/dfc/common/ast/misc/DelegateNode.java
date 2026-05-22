@@ -6,6 +6,7 @@ import com.ishland.c2me.opts.dfc.common.util.ArrayCache;
 import com.ishland.c2me.opts.dfc.common.vif.EachApplierVanillaInterface;
 import com.ishland.c2me.opts.dfc.common.ast.AstNode;
 import com.ishland.c2me.opts.dfc.common.ast.EvalType;
+import com.ishland.c2me.opts.dfc.common.ast.IInlineableAstNode;
 import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.gen.densityfunction.DensityFunction;
@@ -15,7 +16,7 @@ import org.objectweb.asm.commons.InstructionAdapter;
 
 import java.util.Objects;
 
-public class DelegateNode implements AstNode {
+public class DelegateNode implements AstNode, IInlineableAstNode {
 
 //    private static final ConcurrentHashMap<Class<?>, LongAdder> statistics = new ConcurrentHashMap<>();
 
@@ -51,7 +52,7 @@ public class DelegateNode implements AstNode {
     }
 
     @Override
-    public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
+    public void emitValueSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
         String newField = context.newField(DensityFunction.class, this.densityFunction);
         m.load(0, InstructionAdapter.OBJECT_TYPE);
         m.getfield(context.className, newField, Type.getDescriptor(DensityFunction.class));
@@ -67,6 +68,11 @@ public class DelegateNode implements AstNode {
                 FabricLoader.getInstance().getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_6910", "method_40464", "(Lnet/minecraft/class_6910$class_6912;)D"),
                 Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.NoisePos.class))
         );
+    }
+
+    @Override
+    public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
+        emitValueSingle(context, m, localVarConsumer);
         m.areturn(Type.DOUBLE_TYPE);
     }
 
