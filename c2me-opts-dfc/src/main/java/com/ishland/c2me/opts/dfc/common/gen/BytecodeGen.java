@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
@@ -104,9 +103,8 @@ public class BytecodeGen {
         genContext.newSingleMethod0((adapter, localVarConsumer) -> rootNode.doBytecodeGenSingle(genContext, adapter, localVarConsumer), "evalSingle", true);
         genContext.newMultiMethod0((adapter, localVarConsumer) -> rootNode.doBytecodeGenMulti(genContext, adapter, localVarConsumer), "evalMulti", true);
 
-        List<Object> args = genContext.args.entrySet().stream()
-                .sorted(Comparator.comparingInt(o -> o.getValue().ordinal()))
-                .map(Map.Entry::getKey)
+        List<Object> args = genContext.getFields().stream()
+                .map(Context.FieldRecord::data)
                 .collect(Collectors.toCollection(ArrayList::new));
 
         if (cached != null) {
@@ -165,10 +163,10 @@ public class BytecodeGen {
         m.load(0, InstructionAdapter.OBJECT_TYPE);
         m.invokespecial(Type.getInternalName(Object.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE), false);
 
-        for (Map.Entry<Object, Context.FieldRecord> entry : context.args.entrySet().stream().sorted(Comparator.comparingInt(o -> o.getValue().ordinal())).toList()) {
-            String name = entry.getValue().name();
-            Class<?> type = entry.getValue().type();
-            int ordinal = entry.getValue().ordinal();
+        for (Context.FieldRecord field : context.getFields()) {
+            String name = field.name();
+            Class<?> type = field.type();
+            int ordinal = field.ordinal();
 
             m.load(0, InstructionAdapter.OBJECT_TYPE);
             m.load(1, InstructionAdapter.OBJECT_TYPE);
@@ -213,13 +211,13 @@ public class BytecodeGen {
 
         m.anew(Type.getType(ArrayList.class));
         m.dup();
-        m.iconst(context.args.size());
+        m.iconst(context.getFields().size());
         m.invokespecial(Type.getInternalName(ArrayList.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE), false);
         m.store(1, InstructionAdapter.OBJECT_TYPE);
 
-        for (Map.Entry<Object, Context.FieldRecord> entry : context.args.entrySet().stream().sorted(Comparator.comparingInt(o -> o.getValue().ordinal())).toList()) {
-            String name = entry.getValue().name();
-            Class<?> type = entry.getValue().type();
+        for (Context.FieldRecord field : context.getFields()) {
+            String name = field.name();
+            Class<?> type = field.type();
 
             m.load(1, InstructionAdapter.OBJECT_TYPE);
             m.load(0, InstructionAdapter.OBJECT_TYPE);
@@ -319,11 +317,13 @@ public class BytecodeGen {
         public final String className;
         public final String classDesc;
         private int methodIdx = 0;
+        private int fieldIdx = 0;
         private final Object2ReferenceOpenHashMap<AstNode, String> singleMethods = new Object2ReferenceOpenHashMap<>();
         private final Object2ReferenceOpenHashMap<AstNode, String> multiMethods = new Object2ReferenceOpenHashMap<>();
         private final Object2ReferenceOpenHashMap<Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper>, String> splineMethods = new Object2ReferenceOpenHashMap<>();
         private final ObjectOpenHashSet<String> postProcessMethods = new ObjectOpenHashSet<>();
         private final Reference2ObjectOpenHashMap<Object, FieldRecord> args = new Reference2ObjectOpenHashMap<>();
+        private final Object2ReferenceOpenHashMap<AstNode, FieldRecord> cacheArgs = new Object2ReferenceOpenHashMap<>();
         private final ReferenceCounts referenceCounts;
 
         public Context(ClassWriter classWriter, String className) {
@@ -484,11 +484,34 @@ public class BytecodeGen {
             if (existing != null) {
                 return existing.name();
             }
-            int size = this.args.size();
-            String name = String.format("field_%d", size);
+            FieldRecord fieldRecord = this.newFieldRecord(type, data);
+            this.args.put(data, fieldRecord);
+            return fieldRecord.name();
+        }
+
+        public <T> String newCacheField(Class<T> type, AstNode key, T data) {
+            FieldRecord existing = this.cacheArgs.get(key);
+            if (existing != null) {
+                return existing.name();
+            }
+            FieldRecord fieldRecord = this.newFieldRecord(type, data);
+            this.cacheArgs.put(key, fieldRecord);
+            return fieldRecord.name();
+        }
+
+        private <T> FieldRecord newFieldRecord(Class<T> type, T data) {
+            int ordinal = this.fieldIdx++;
+            String name = String.format("field_%d", ordinal);
             classWriter.visitField(Opcodes.ACC_PRIVATE, name, Type.getDescriptor(type), null, null);
-            this.args.put(data, new FieldRecord(name, size, type));
-            return name;
+            return new FieldRecord(name, ordinal, type, data);
+        }
+
+        private List<FieldRecord> getFields() {
+            List<FieldRecord> fields = new ArrayList<>(this.args.size() + this.cacheArgs.size());
+            fields.addAll(this.args.values());
+            fields.addAll(this.cacheArgs.values());
+            fields.sort(Comparator.comparingInt(FieldRecord::ordinal));
+            return fields;
         }
 
         public void doCountedLoop(InstructionAdapter m, LocalVarConsumer localVarConsumer, IntConsumer bodyGenerator) {
@@ -576,7 +599,7 @@ public class BytecodeGen {
             int createLocalVariable(String name, String descriptor);
         }
 
-        private static record FieldRecord(String name, int ordinal, Class<?> type) {
+        private static record FieldRecord(String name, int ordinal, Class<?> type, Object data) {
         }
     }
 

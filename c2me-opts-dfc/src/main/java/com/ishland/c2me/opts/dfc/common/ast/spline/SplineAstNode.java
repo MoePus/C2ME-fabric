@@ -5,13 +5,16 @@ import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
 import com.ishland.c2me.opts.dfc.common.ast.EvalType;
 import com.ishland.c2me.opts.dfc.common.ast.McToAst;
 import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
+import com.ishland.c2me.opts.dfc.common.vif.AstVanillaInterface;
 import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
 import com.ishland.flowsched.util.Assertions;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.ints.IntObjectPair;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Spline;
+import net.minecraft.world.gen.densityfunction.DensityFunction;
 import net.minecraft.world.gen.densityfunction.DensityFunctionTypes;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Opcodes;
@@ -22,11 +25,13 @@ import org.objectweb.asm.commons.InstructionAdapter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 public class SplineAstNode implements AstNode {
 
     public static final String SPLINE_METHOD_DESC = Type.getMethodDescriptor(Type.getType(float.class), Type.getType(int.class), Type.getType(int.class), Type.getType(int.class), Type.getType(EvalType.class));
     private final Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> spline;
+    private AstNode[] children;
 
     public SplineAstNode(Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> spline) {
         this.spline = spline;
@@ -50,12 +55,76 @@ public class SplineAstNode implements AstNode {
 
     @Override
     public AstNode[] getChildren() {
-        return new AstNode[0];
+        AstNode[] children = this.children;
+        if (children == null) {
+            List<AstNode> collected = new ArrayList<>();
+            collectChildren(this.spline, collected);
+            children = collected.toArray(AstNode[]::new);
+            this.children = children;
+        }
+        return children;
     }
 
     @Override
     public AstNode transform(AstTransformer transformer) {
         return transformer.transform(this);
+    }
+
+    public SplineAstNode mapLocationFunctions(UnaryOperator<AstNode> mapper) {
+        Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> transformed = transformSpline(this.spline, mapper);
+        if (transformed == this.spline) {
+            return this;
+        }
+        return new SplineAstNode(transformed);
+    }
+
+    private static void collectChildren(Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> spline, List<AstNode> children) {
+        if (spline instanceof Spline.Implementation<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> impl) {
+            children.add(McToAst.toAst(impl.locationFunction().function().value()));
+            for (Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> value : impl.values()) {
+                collectChildren(value, children);
+            }
+        }
+    }
+
+    private static Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> transformSpline(
+            Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> spline,
+            UnaryOperator<AstNode> mapper) {
+        if (spline instanceof Spline.Implementation<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> impl) {
+            boolean modified = false;
+            DensityFunctionTypes.Spline.DensityFunctionWrapper locationFunction = transformLocationFunction(impl.locationFunction(), mapper);
+            if (locationFunction != impl.locationFunction()) {
+                modified = true;
+            }
+
+            List<Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper>> values = new ArrayList<>(impl.values().size());
+            for (Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> value : impl.values()) {
+                Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> transformed = transformSpline(value, mapper);
+                values.add(transformed);
+                if (transformed != value) {
+                    modified = true;
+                }
+            }
+
+            if (!modified) {
+                return spline;
+            }
+            // MC 1.21.1 mappings expose the 6-arg constructor; revisit on mapping updates.
+            return new Spline.Implementation<>(locationFunction, impl.locations(), List.copyOf(values), impl.derivatives(), impl.min(), impl.max());
+        }
+        return spline;
+    }
+
+    private static DensityFunctionTypes.Spline.DensityFunctionWrapper transformLocationFunction(
+            DensityFunctionTypes.Spline.DensityFunctionWrapper locationFunction,
+            UnaryOperator<AstNode> mapper) {
+        DensityFunction function = locationFunction.function().value();
+        AstNode ast = McToAst.toAst(function);
+        AstNode transformed = mapper.apply(ast);
+        if (transformed == ast) {
+            return locationFunction;
+        }
+        return new DensityFunctionTypes.Spline.DensityFunctionWrapper(RegistryEntry.of(new AstVanillaInterface(transformed, function)));
     }
 
     @Override

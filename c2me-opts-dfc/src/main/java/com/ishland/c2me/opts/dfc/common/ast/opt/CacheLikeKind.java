@@ -13,9 +13,6 @@ enum CacheLikeKind {
     UNKNOWN;
 
     static CacheLikeKind from(IFastCacheLike cacheLike) {
-        if (cacheLike instanceof CacheLikeTypeProvider provider) {
-            return provider.c2me$getCacheLikeKind();
-        }
         if ((Object) cacheLike instanceof DensityFunctionTypes.Wrapping wrapping) {
             return fromWrappingType(wrapping.type());
         }
@@ -37,12 +34,32 @@ enum CacheLikeKind {
         return UNKNOWN;
     }
 
-    boolean isMemoLike() {
-        return this == CACHE2D || this == CACHE_ONCE;
-    }
-
     boolean isYIndependentCache() {
         return this == CACHE2D || this == FLAT_CACHE;
+    }
+
+    static boolean canAbsorb(CacheLikeKind outer, CacheLikeKind inner, boolean isDelegateYIndependent) {
+        return switch (outer) {
+            case INTERPOLATED -> switch (inner) {
+                case INTERPOLATED, CACHE_ONCE, CACHE_ALL_IN_CELL -> true;
+                case CACHE2D -> isDelegateYIndependent;
+                default -> false;
+            };
+            case FLAT_CACHE -> switch (inner) {
+                case FLAT_CACHE, CACHE2D, CACHE_ONCE, CACHE_ALL_IN_CELL -> true;
+                default -> false;
+            };
+            case CACHE2D -> switch (inner) {
+                case CACHE2D, CACHE_ONCE, CACHE_ALL_IN_CELL -> true;
+                default -> false;
+            };
+            case CACHE_ONCE, CACHE_ALL_IN_CELL -> switch (inner) {
+                case CACHE2D -> isDelegateYIndependent;
+                case CACHE_ONCE, CACHE_ALL_IN_CELL -> true;
+                default -> false;
+            };
+            case UNKNOWN -> false;
+        };
     }
 
     DensityFunctionTypes.Wrapping.Type toWrappingType() {
@@ -62,10 +79,4 @@ enum CacheLikeKind {
             case CACHE_ALL_IN_CELL -> CACHE_ALL_IN_CELL;
         };
     }
-}
-
-interface CacheLikeTypeProvider {
-
-    CacheLikeKind c2me$getCacheLikeKind();
-
 }

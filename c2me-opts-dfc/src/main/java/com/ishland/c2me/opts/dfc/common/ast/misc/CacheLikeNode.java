@@ -74,7 +74,7 @@ public class CacheLikeNode implements AstNode {
     @Override
     public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
         String delegateMethod = context.newSingleMethod(this.delegate);
-        String cacheLikeField = context.newField(IFastCacheLike.class, this.cacheLike);
+        String cacheLikeField = context.newCacheField(IFastCacheLike.class, this, this.cacheLike);
         genPostprocessingMethod(context, cacheLikeField);
 
         int eval = localVarConsumer.createLocalVariable("eval", Type.DOUBLE_TYPE.getDescriptor());
@@ -124,7 +124,7 @@ public class CacheLikeNode implements AstNode {
     @Override
     public void doBytecodeGenMulti(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
         String delegateMethod = context.newMultiMethod(this.delegate);
-        String cacheLikeField = context.newField(IFastCacheLike.class, this.cacheLike);
+        String cacheLikeField = context.newCacheField(IFastCacheLike.class, this, this.cacheLike);
 
         genPostprocessingMethod(context, cacheLikeField);
 

@@ -23,6 +23,10 @@ public class DFTNoiseNode implements AstNode {
         this.yScale = yScale;
     }
 
+    public double getYScale() {
+        return yScale;
+    }
+
     @Override
     public double evalSingle(int x, int y, int z, EvalType type) {
         return this.noise.sample(x * xzScale, y * yScale, z * xzScale);
