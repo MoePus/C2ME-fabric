@@ -27,9 +27,13 @@ final class AstCostEstimator {
     static final int BINARY_SELF_COST = 3;
     static final int RANGE_CHOICE_SELF_COST = 8;
     static final int Y_GRADIENT_COST = 5;
-    static final int NOISE_COST = 40;
-    static final int SHIFT_NOISE_COST = 32;
-    static final int WEIRD_SCALED_SAMPLER_COST = 48;
+    // DoublePerlinNoiseSampler: two OctavePerlinNoiseSamplers, each with multiple Perlin octaves;
+    // every octave samples 8 grid corners with permutation-table lookups and dot products.
+    static final int NOISE_COST = 240;
+    // Single-octave Perlin (DFTShift/A/B use offsetNoise, configured as one octave).
+    static final int SHIFT_NOISE_COST = 20;
+    // Single Perlin sample plus scalar math; rarity mapper is a fast lookup.
+    static final int WEIRD_SCALED_SAMPLER_COST = 24;
     static final int DELEGATE_COST = 24;
     static final int DEFAULT_SELF_COST = 8;
     static final int SPLINE_SELF_COST = 12;

@@ -38,30 +38,6 @@ enum CacheLikeKind {
         return this == CACHE2D || this == FLAT_CACHE;
     }
 
-    static boolean canAbsorb(CacheLikeKind outer, CacheLikeKind inner, boolean isDelegateYIndependent) {
-        return switch (outer) {
-            case INTERPOLATED -> switch (inner) {
-                case INTERPOLATED, CACHE_ONCE, CACHE_ALL_IN_CELL -> true;
-                case CACHE2D -> isDelegateYIndependent;
-                default -> false;
-            };
-            case FLAT_CACHE -> switch (inner) {
-                case FLAT_CACHE, CACHE2D, CACHE_ONCE, CACHE_ALL_IN_CELL -> true;
-                default -> false;
-            };
-            case CACHE2D -> switch (inner) {
-                case CACHE2D, CACHE_ONCE, CACHE_ALL_IN_CELL -> true;
-                default -> false;
-            };
-            case CACHE_ONCE, CACHE_ALL_IN_CELL -> switch (inner) {
-                case CACHE2D -> isDelegateYIndependent;
-                case CACHE_ONCE, CACHE_ALL_IN_CELL -> true;
-                default -> false;
-            };
-            case UNKNOWN -> false;
-        };
-    }
-
     DensityFunctionTypes.Wrapping.Type toWrappingType() {
         return switch (this) {
             case CACHE2D -> DensityFunctionTypes.Wrapping.Type.CACHE2D;

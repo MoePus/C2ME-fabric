@@ -27,8 +27,13 @@ import net.minecraft.world.gen.densityfunction.DensityFunctionTypes;
 
 public final class CacheLikeOptimizer {
 
-    private static final int CACHE2D_INSERT_THRESHOLD = 32;
-    private static final int CACHE_ONCE_INSERT_THRESHOLD = 96;
+    // CACHE2D query is a single long compare + branch (see MixinChunkNoiseSamplerCache2D);
+    // the main cost is breaking the JIT pipeline, so we insert aggressively.
+    private static final int CACHE2D_INSERT_THRESHOLD = 16;
+    // CACHE_ONCE single-value path is cheap, but the array path scans up to one cell worth
+    // of (x, y, z) tuples on each query (see MixinChunkNoiseSamplerCacheOnce), so require
+    // more reuse before paying that overhead.
+    private static final int CACHE_ONCE_INSERT_THRESHOLD = 48;
 
     private final CacheFactory cacheFactory;
     private final ReferenceCounts referenceCounts;
@@ -49,107 +54,34 @@ public final class CacheLikeOptimizer {
     }
 
     private static AstNode stripMemoCaches(AstNode node) {
-        return stripNestedCaches(node, null, false);
-    }
-
-    private static AstNode stripNestedCaches(AstNode node, CacheLikeKind absorbingOuter, boolean directChild) {
-        if (node instanceof CacheLikeNode cache) {
-            return stripCache(cache, absorbingOuter, directChild);
-        }
-        return rewriteChildrenForStrip(node, absorbingOuter);
-    }
-
-    private static AstNode stripCache(CacheLikeNode node, CacheLikeKind absorbingOuter, boolean directChild) {
-        CacheLikeKind nodeKind = CacheLikeKind.from(node.getCacheLike());
-        AstNode delegate = stripNestedCaches(node.getDelegate(), nodeKind, true);
-        CacheLikeNode stripped = delegate == node.getDelegate() ? node : new CacheLikeNode(node.getCacheLike(), delegate);
-        if (absorbingOuter != null) {
-            boolean isDelegateYIndependent = YDependencyAnalyzer.isYIndependent(delegate);
-            if (canAbsorb(absorbingOuter, nodeKind, isDelegateYIndependent, directChild)) {
-                return stripNestedCaches(delegate, absorbingOuter, directChild);
+        // Plan stage 2: drop every CACHE2D / CACHE_ONCE wrapper, keep the other cache kinds.
+        // Exception: a top-level naked CACHE2D / CACHE_ONCE is preserved so vanilla anchors
+        // at the very root of a density function survive; we only strip the memo caches
+        // that appear inside an outer expression.
+        if (node instanceof CacheLikeNode topCache) {
+            AstNode strippedDelegate = stripAllMemoCaches(topCache.getDelegate());
+            if (strippedDelegate == topCache.getDelegate()) {
+                return topCache;
             }
+            return new CacheLikeNode(topCache.getCacheLike(), strippedDelegate);
         }
-        return stripped;
+        return stripAllMemoCaches(node);
     }
 
-    private static boolean canAbsorb(CacheLikeKind outer, CacheLikeKind inner, boolean isDelegateYIndependent, boolean directChild) {
-        if (!CacheLikeKind.canAbsorb(outer, inner, isDelegateYIndependent)) {
-            return false;
-        }
-        return directChild || inner != CacheLikeKind.INTERPOLATED;
-    }
-
-    private static AstNode rewriteChildrenForStrip(AstNode node, CacheLikeKind absorbingOuter) {
-        return switch (node) {
-            case AbstractBinaryNode binary -> stripBinary(binary, absorbingOuter);
-            case AbstractUnaryNode unary -> stripUnary(unary, absorbingOuter);
-            case RangeChoiceNode range -> stripRangeChoice(range, absorbingOuter);
-            case ShiftedNoiseNode shiftedNoise -> stripShiftedNoise(shiftedNoise, absorbingOuter);
-            case DFTWeirdScaledSamplerNode weirdScaled -> stripWeirdScaledSampler(weirdScaled, absorbingOuter);
-            case SplineAstNode spline -> spline.mapLocationFunctions(child -> stripNestedCaches(child, absorbingOuter, false));
-            default -> node;
-        };
-    }
-
-    private static AstNode stripBinary(AbstractBinaryNode node, CacheLikeKind absorbingOuter) {
-        AstNode left = stripNestedCaches(node.getLeft(), absorbingOuter, false);
-        AstNode right = stripNestedCaches(node.getRight(), absorbingOuter, false);
-        if (left == node.getLeft() && right == node.getRight()) {
-            return node;
-        }
-        return switch (node) {
-            case AddNode ignored -> new AddNode(left, right);
-            case MulNode ignored -> new MulNode(left, right);
-            case MinNode ignored -> new MinNode(left, right);
-            case MaxNode ignored -> new MaxNode(left, right);
-            case MinShortNode minShort -> new MinShortNode(left, right, minShort.getRightMin());
-            case MaxShortNode maxShort -> new MaxShortNode(left, right, maxShort.getRightMax());
-            default -> node;
-        };
-    }
-
-    private static AstNode stripUnary(AbstractUnaryNode node, CacheLikeKind absorbingOuter) {
-        AstNode operand = stripNestedCaches(node.getOperand(), absorbingOuter, false);
-        if (operand == node.getOperand()) {
-            return node;
-        }
-        return switch (node) {
-            case AbsNode ignored -> new AbsNode(operand);
-            case SquareNode ignored -> new SquareNode(operand);
-            case CubeNode ignored -> new CubeNode(operand);
-            case NegNode ignored -> new NegNode(operand);
-            case NegMulNode negMul -> new NegMulNode(operand, negMul.getNegMul());
-            case SqueezeNode ignored -> new SqueezeNode(operand);
-            default -> node;
-        };
-    }
-
-    private static AstNode stripRangeChoice(RangeChoiceNode node, CacheLikeKind absorbingOuter) {
-        AstNode input = stripNestedCaches(node.getInput(), absorbingOuter, false);
-        AstNode whenInRange = stripNestedCaches(node.getWhenInRange(), absorbingOuter, false);
-        AstNode whenOutOfRange = stripNestedCaches(node.getWhenOutOfRange(), absorbingOuter, false);
-        if (input == node.getInput() && whenInRange == node.getWhenInRange() && whenOutOfRange == node.getWhenOutOfRange()) {
-            return node;
-        }
-        return new RangeChoiceNode(input, node.getMinInclusive(), node.getMaxExclusive(), whenInRange, whenOutOfRange);
-    }
-
-    private static AstNode stripShiftedNoise(ShiftedNoiseNode node, CacheLikeKind absorbingOuter) {
-        AstNode shiftX = stripNestedCaches(node.getShiftX(), absorbingOuter, false);
-        AstNode shiftY = stripNestedCaches(node.getShiftY(), absorbingOuter, false);
-        AstNode shiftZ = stripNestedCaches(node.getShiftZ(), absorbingOuter, false);
-        if (shiftX == node.getShiftX() && shiftY == node.getShiftY() && shiftZ == node.getShiftZ()) {
-            return node;
-        }
-        return new ShiftedNoiseNode(shiftX, shiftY, shiftZ, node.getXzScale(), node.getYScale(), node.getNoise());
-    }
-
-    private static AstNode stripWeirdScaledSampler(DFTWeirdScaledSamplerNode node, CacheLikeKind absorbingOuter) {
-        AstNode input = stripNestedCaches(node.getInput(), absorbingOuter, false);
-        if (input == node.getInput()) {
-            return node;
-        }
-        return new DFTWeirdScaledSamplerNode(input, node.getNoise(), node.getMapper());
+    private static AstNode stripAllMemoCaches(AstNode node) {
+        return node.transform(astNode -> {
+            if (astNode instanceof CacheLikeNode cache) {
+                CacheLikeKind kind = CacheLikeKind.from(cache.getCacheLike());
+                if (kind == CacheLikeKind.CACHE2D || kind == CacheLikeKind.CACHE_ONCE) {
+                    return cache.getDelegate();
+                }
+                return astNode;
+            }
+            if (astNode instanceof SplineAstNode spline) {
+                return spline.mapLocationFunctions(CacheLikeOptimizer::stripAllMemoCaches);
+            }
+            return astNode;
+        });
     }
 
     private AstNode insertCaches(AstNode node) {
