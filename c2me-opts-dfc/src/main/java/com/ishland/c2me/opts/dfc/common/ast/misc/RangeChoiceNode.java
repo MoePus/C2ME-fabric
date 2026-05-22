@@ -207,12 +207,8 @@ public class RangeChoiceNode implements AstNode {
 
     @Override
     public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
-        String inputMethod = context.newSingleMethod(this.input);
-        String whenInRangeMethod = context.newSingleMethod(this.whenInRange);
-        String whenOutOfRangeMethod = context.newSingleMethod(this.whenOutOfRange);
-
         int inputValue = localVarConsumer.createLocalVariable("inputValue", Type.DOUBLE_TYPE.getDescriptor());
-        context.callDelegateSingle(m, inputMethod);
+        operandCallByteCodeGen(this.input, context, m, localVarConsumer);
         m.store(inputValue, Type.DOUBLE_TYPE);
 
         Label whenOutOfRangeLabel = new Label();
@@ -227,18 +223,18 @@ public class RangeChoiceNode implements AstNode {
         m.cmpg(Type.DOUBLE_TYPE);
         m.ifge(whenOutOfRangeLabel); // inputValue >= maxExclusive
 
-        if (whenInRangeMethod.equals(inputMethod)) {
+        if (this.whenInRange.equals(this.input)) {
             m.load(inputValue, Type.DOUBLE_TYPE);
         } else {
-            context.callDelegateSingle(m, whenInRangeMethod);
+            operandCallByteCodeGen(this.whenInRange, context, m, localVarConsumer);
         }
         m.goTo(end);
 
         m.visitLabel(whenOutOfRangeLabel);
-        if (whenOutOfRangeMethod.equals(inputMethod)) {
+        if (this.whenOutOfRange.equals(this.input)) {
             m.load(inputValue, Type.DOUBLE_TYPE);
         } else {
-            context.callDelegateSingle(m, whenOutOfRangeMethod);
+            operandCallByteCodeGen(this.whenOutOfRange, context, m, localVarConsumer);
         }
 
         m.visitLabel(end);

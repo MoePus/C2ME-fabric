@@ -73,43 +73,52 @@ public class CacheLikeNode implements AstNode {
 
     @Override
     public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
-        String delegateMethod = context.newSingleMethod(this.delegate);
+        if (this.cacheLike == null) {
+            operandCallByteCodeGen(this.delegate, context, m, localVarConsumer);
+            m.areturn(Type.DOUBLE_TYPE);
+            return;
+        }
+
         String cacheLikeField = context.newCacheField(IFastCacheLike.class, this, this.cacheLike);
         genPostprocessingMethod(context, cacheLikeField);
 
+        int cacheVar = localVarConsumer.createLocalVariable("cache", Type.getDescriptor(IFastCacheLike.class));
         int eval = localVarConsumer.createLocalVariable("eval", Type.DOUBLE_TYPE.getDescriptor());
 
-        Label cacheExists = new Label();
+        m.load(0, InstructionAdapter.OBJECT_TYPE);
+        m.getfield(context.className, cacheLikeField, Type.getDescriptor(IFastCacheLike.class));
+        m.store(cacheVar, InstructionAdapter.OBJECT_TYPE);
+
         Label cacheMiss = new Label();
+        Label probCacheMiss = new Label();
 
-        m.load(0, InstructionAdapter.OBJECT_TYPE);
-        m.getfield(context.className, cacheLikeField, Type.getDescriptor(IFastCacheLike.class));
-        m.ifnonnull(cacheExists);
-        context.callDelegateSingle(m, delegateMethod);
-        m.areturn(Type.DOUBLE_TYPE);
-
-        m.visitLabel(cacheExists);
-        m.load(0, InstructionAdapter.OBJECT_TYPE);
-        m.getfield(context.className, cacheLikeField, Type.getDescriptor(IFastCacheLike.class));
+        m.load(cacheVar, InstructionAdapter.OBJECT_TYPE);
         m.load(1, Type.INT_TYPE);
         m.load(2, Type.INT_TYPE);
         m.load(3, Type.INT_TYPE);
         m.load(4, InstructionAdapter.OBJECT_TYPE);
         m.invokeinterface(Type.getInternalName(IFastCacheLike.class), "c2me$getCached", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.getType(EvalType.class)));
-        m.dup2();
-        m.invokestatic(Type.getInternalName(Double.class), "doubleToRawLongBits", Type.getMethodDescriptor(Type.LONG_TYPE, Type.DOUBLE_TYPE), false);
-        m.lconst(IFastCacheLike.CACHE_MISS_NAN_BITS);
-        m.lcmp();
-        m.ifeq(cacheMiss); // operand1 == operand2, branched with cache res
+        m.dup2(); // [D, D]
+        m.dup2(); // [D, D, D]
+        m.cmpg(Type.DOUBLE_TYPE);    // Density functions should NEVER compute a NaN // DCMP consumes two double, so [D, I]
+        m.ifne(probCacheMiss); // Because NaN != Nan // [D]
+        m.areturn(Type.DOUBLE_TYPE);
+
+        m.visitLabel(probCacheMiss); // But for safety
+        m.dup2(); // [D, D]
+        m.invokestatic(Type.getInternalName(Double.class), "doubleToRawLongBits", Type.getMethodDescriptor(Type.LONG_TYPE, Type.DOUBLE_TYPE), false); // [D, L]
+        m.lconst(IFastCacheLike.CACHE_MISS_NAN_BITS); // [D, L, L2]
+        m.lcmp(); // [D, I]
+        m.ifeq(cacheMiss); // [D]
         m.areturn(Type.DOUBLE_TYPE);
 
         m.visitLabel(cacheMiss);
         m.pop2();
 
-        context.callDelegateSingle(m, delegateMethod);
+        operandCallByteCodeGen(this.delegate, context, m, localVarConsumer);
         m.store(eval, Type.DOUBLE_TYPE);
-        m.load(0, InstructionAdapter.OBJECT_TYPE);
-        m.getfield(context.className, cacheLikeField, Type.getDescriptor(IFastCacheLike.class));
+
+        m.load(cacheVar, InstructionAdapter.OBJECT_TYPE);
         m.load(1, Type.INT_TYPE);
         m.load(2, Type.INT_TYPE);
         m.load(3, Type.INT_TYPE);

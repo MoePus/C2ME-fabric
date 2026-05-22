@@ -1,6 +1,7 @@
 package com.ishland.c2me.opts.dfc.common.ast.noise;
 
 import com.ishland.c2me.opts.dfc.common.ast.AstNode;
+import com.ishland.c2me.opts.dfc.common.ast.IInlineableAstNode;
 import com.ishland.c2me.opts.dfc.common.ast.AstTransformer;
 import com.ishland.c2me.opts.dfc.common.ast.EvalType;
 import com.ishland.c2me.opts.dfc.common.gen.BytecodeGen;
@@ -11,7 +12,7 @@ import org.objectweb.asm.commons.InstructionAdapter;
 
 import java.util.Objects;
 
-public class DFTNoiseNode implements AstNode {
+public class DFTNoiseNode implements AstNode, IInlineableAstNode {
 
     private final DensityFunction.Noise noise;
     private final double xzScale;
@@ -50,7 +51,7 @@ public class DFTNoiseNode implements AstNode {
     }
 
     @Override
-    public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
+    public void emitValueSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
         String noiseField = context.newField(DensityFunction.Noise.class, this.noise);
 
         m.load(0, InstructionAdapter.OBJECT_TYPE);
@@ -77,6 +78,11 @@ public class DFTNoiseNode implements AstNode {
                 "(DDD)D",
                 false
         );
+    }
+
+    @Override
+    public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
+        emitValueSingle(context, m, localVarConsumer);
         m.areturn(Type.DOUBLE_TYPE);
     }
 

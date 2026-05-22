@@ -41,12 +41,9 @@ public class MaxShortNode extends AbstractBinaryNode {
 
     @Override
     public void doBytecodeGenSingle(BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
-        String leftMethod = context.newSingleMethod(this.left);
-        String rightMethod = context.newSingleMethod(this.right);
-
         Label minLabel = new Label();
 
-        context.callDelegateSingle(m, leftMethod);
+        operandCallByteCodeGen(this.left, context, m, localVarConsumer);
         m.dup2();
         m.dconst(this.rightMax);
         m.cmpl(Type.DOUBLE_TYPE);
@@ -54,7 +51,7 @@ public class MaxShortNode extends AbstractBinaryNode {
         m.areturn(Type.DOUBLE_TYPE);
 
         m.visitLabel(minLabel);
-        context.callDelegateSingle(m, rightMethod);
+        operandCallByteCodeGen(this.right, context, m, localVarConsumer);
         m.invokestatic(
                 Type.getInternalName(Math.class),
                 "max",
