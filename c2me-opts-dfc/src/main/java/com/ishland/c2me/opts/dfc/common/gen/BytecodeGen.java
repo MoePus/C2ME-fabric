@@ -4,6 +4,7 @@ import com.ishland.c2me.opts.dfc.common.ast.AstNode;
 import com.ishland.c2me.opts.dfc.common.ast.AstOptimizer;
 import com.ishland.c2me.opts.dfc.common.ast.EvalType;
 import com.ishland.c2me.opts.dfc.common.ast.McToAst;
+import com.ishland.c2me.opts.dfc.common.ast.ReferenceCounts;
 import com.ishland.c2me.opts.dfc.common.ast.dfvisitor.StripBlending;
 import com.ishland.c2me.opts.dfc.common.ast.misc.ConstantNode;
 import com.ishland.c2me.opts.dfc.common.ast.misc.RootNode;
@@ -99,7 +100,7 @@ public class BytecodeGen {
 
         RootNode rootNode = new RootNode(node);
 
-        Context genContext = new Context(writer, name);
+        Context genContext = new Context(writer, name, ReferenceCounts.collect(node));
         genContext.newSingleMethod0((adapter, localVarConsumer) -> rootNode.doBytecodeGenSingle(genContext, adapter, localVarConsumer), "evalSingle", true);
         genContext.newMultiMethod0((adapter, localVarConsumer) -> rootNode.doBytecodeGenMulti(genContext, adapter, localVarConsumer), "evalMulti", true);
 
@@ -323,15 +324,25 @@ public class BytecodeGen {
         private final Object2ReferenceOpenHashMap<Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper>, String> splineMethods = new Object2ReferenceOpenHashMap<>();
         private final ObjectOpenHashSet<String> postProcessMethods = new ObjectOpenHashSet<>();
         private final Reference2ObjectOpenHashMap<Object, FieldRecord> args = new Reference2ObjectOpenHashMap<>();
+        private final ReferenceCounts referenceCounts;
 
         public Context(ClassWriter classWriter, String className) {
+            this(classWriter, className, ReferenceCounts.empty());
+        }
+
+        public Context(ClassWriter classWriter, String className, ReferenceCounts referenceCounts) {
             this.classWriter = Objects.requireNonNull(classWriter);
             this.className = Objects.requireNonNull(className);
             this.classDesc = String.format("L%s;", this.className);
+            this.referenceCounts = Objects.requireNonNull(referenceCounts);
         }
         
         public String nextMethodName() {
             return String.format("method_%d", methodIdx++);
+        }
+
+        public int getReferenceCount(AstNode node) {
+            return this.referenceCounts.get(node);
         }
 
         public String nextMethodName(String suffix) {

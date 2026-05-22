@@ -16,6 +16,10 @@ public class MaxShortNode extends AbstractBinaryNode {
         this.rightMax = rightMax;
     }
 
+    public double getRightMax() {
+        return rightMax;
+    }
+
     @Override
     protected AstNode newInstance(AstNode left, AstNode right) {
         return new MaxShortNode(left, right, this.rightMax);

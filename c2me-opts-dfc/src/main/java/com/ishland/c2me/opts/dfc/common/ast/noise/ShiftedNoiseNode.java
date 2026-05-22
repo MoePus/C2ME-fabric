@@ -30,6 +30,30 @@ public class ShiftedNoiseNode implements AstNode {
         this.noise = Objects.requireNonNull(noise);
     }
 
+    public AstNode getShiftX() {
+        return shiftX;
+    }
+
+    public AstNode getShiftY() {
+        return shiftY;
+    }
+
+    public AstNode getShiftZ() {
+        return shiftZ;
+    }
+
+    public double getXzScale() {
+        return xzScale;
+    }
+
+    public double getYScale() {
+        return yScale;
+    }
+
+    public Noise getNoise() {
+        return noise;
+    }
+
     @Override
     public double evalSingle(int x, int y, int z, EvalType type) {
         double d = x * this.xzScale + this.shiftX.evalSingle(x, y, z, type);

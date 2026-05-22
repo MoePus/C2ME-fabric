@@ -26,6 +26,18 @@ public class DFTWeirdScaledSamplerNode implements AstNode {
         this.mapper = Objects.requireNonNull(mapper);
     }
 
+    public AstNode getInput() {
+        return input;
+    }
+
+    public DensityFunction.Noise getNoise() {
+        return noise;
+    }
+
+    public DensityFunctionTypes.WeirdScaledSampler.RarityValueMapper getMapper() {
+        return mapper;
+    }
+
     @Override
     public double evalSingle(int x, int y, int z, EvalType type) {
         double v = this.input.evalSingle(x, y, z, type);

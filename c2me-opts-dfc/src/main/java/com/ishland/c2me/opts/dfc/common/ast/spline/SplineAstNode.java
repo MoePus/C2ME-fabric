@@ -32,6 +32,10 @@ public class SplineAstNode implements AstNode {
         this.spline = spline;
     }
 
+    public Spline<DensityFunctionTypes.Spline.SplinePos, DensityFunctionTypes.Spline.DensityFunctionWrapper> getSpline() {
+        return spline;
+    }
+
     @Override
     public double evalSingle(int x, int y, int z, EvalType type) {
         return spline.apply(new DensityFunctionTypes.Spline.SplinePos(new NoisePosVanillaInterface(x, y, z, type)));

@@ -16,6 +16,10 @@ public class MinShortNode extends AbstractBinaryNode {
         this.rightMin = rightMin;
     }
 
+    public double getRightMin() {
+        return rightMin;
+    }
+
     @Override
     protected AstNode newInstance(AstNode left, AstNode right) {
         return new MinShortNode(left, right, this.rightMin);
