@@ -55,7 +55,7 @@ final class Placement {
     }
 
     private AstNode placeUncached(AstNode node, AstNode covering2DCacheRoot, AstNode parent, int depth, boolean insideCacheOnce) {
-        CachePlacement placement = placementFor(node, parent, depth, insideCacheOnce);
+        CachePlacement placement = placementFor(node);
         if (placement == CachePlacement.CACHE2D) {
             return wrap(node, placeDelegate(node, node, depth, insideCacheOnce));
         } else if (placement == CachePlacement.CACHE_ONCE) {
@@ -97,7 +97,7 @@ final class Placement {
         return result;
     }
 
-    private CachePlacement placementFor(AstNode node, AstNode parent, int depth, boolean insideCacheOnce) {
+    private CachePlacement placementFor(AstNode node) {
         if (DagCseOptimizer.containsStrictBoundary(node)) {
             return CachePlacement.NONE;
         }
@@ -107,26 +107,7 @@ final class Placement {
             }
             return CachePlacement.CACHE2D;
         }
-        if (insideCacheOnce) {
-            return CachePlacement.NONE;
-        }
-        if (!isCacheOnceRoot(parent, depth)) {
-            return CachePlacement.NONE;
-        }
-        if (node.cost() <= DagCseOptimizer.NOISE_COST) {
-            return CachePlacement.NONE;
-        }
-        if (DagCseOptimizer.boundaryCrossesStrictCache(node, this.boundaryUses)) {
-            return CachePlacement.NONE;
-        }
-        return CachePlacement.CACHE_ONCE;
-    }
-
-    private boolean isCacheOnceRoot(AstNode parent, int depth) {
-        if (depth == 0) {
-            return true;
-        }
-        return parent instanceof CacheLikeNode cacheLikeNode && cacheLikeNode.blocksCacheInsertion();
+        return CachePlacement.NONE;
     }
 
     private AstNode placeChildren(AstNode node, AstNode covering2DCacheRoot, int depth, boolean insideCacheOnce) {
