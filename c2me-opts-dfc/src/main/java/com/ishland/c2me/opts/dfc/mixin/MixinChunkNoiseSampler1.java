@@ -4,6 +4,7 @@ import com.ishland.c2me.base.mixin.access.IChunkNoiseSampler;
 import com.ishland.c2me.opts.dfc.common.ducks.IArrayCacheCapable;
 import com.ishland.c2me.opts.dfc.common.ducks.ICoordinatesFilling;
 import com.ishland.c2me.opts.dfc.common.util.ArrayCache;
+import com.ishland.c2me.opts.dfc.common.util.DfcCoordinateFiller;
 import net.minecraft.world.gen.chunk.ChunkNoiseSampler;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,10 +23,7 @@ public class MixinChunkNoiseSampler1 implements IArrayCacheCapable, ICoordinates
 
     @Override
     public void c2me$fillCoordinates(int[] x, int[] y, int[] z) {
-        for (int i = 0; i < ((IChunkNoiseSampler) this.field_36595).getVerticalCellCount() + 1; i++) {
-            x[i] = ((IChunkNoiseSampler) this.field_36595).getStartBlockX() + ((IChunkNoiseSampler) this.field_36595).getCellBlockX();
-            y[i] = (i + ((IChunkNoiseSampler) this.field_36595).getMinimumCellY()) * ((IChunkNoiseSampler) this.field_36595).getVerticalCellBlockCount();
-            z[i] = ((IChunkNoiseSampler) this.field_36595).getStartBlockZ() + ((IChunkNoiseSampler) this.field_36595).getCellBlockZ();
-        }
+        IChunkNoiseSampler sampler = (IChunkNoiseSampler) this.field_36595;
+        DfcCoordinateFiller.fillColumnCoordinates(x, y, z, sampler.getStartBlockX(), sampler.getStartBlockZ(), sampler.getCellBlockX(), sampler.getCellBlockZ(), sampler.getMinimumCellY(), sampler.getVerticalCellBlockCount(), sampler.getVerticalCellCount());
     }
 }
