@@ -27,6 +27,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(AquiferSampler.Impl.class)
 public abstract class MixinAquiferSamplerImpl {
 
+    @Unique
+    private static final int C2ME_AQUIFER_CANDIDATE_COUNT = 12;
+    // when blockY - margin is at or above every involved fluid level, every candidate pair has
+    // similarity q <= -2, so calculateDensity never samples barrier noise and never returns a
+    // positive adjustment; with density <= 0 the slow path can then only produce AIR.
+    // margin 5 is the smallest value satisfying this, verified by exhaustive enumeration over
+    // blockY in [-128, 512] with all pair fluid levels <= blockY - 5 (worst case q = -2.2)
+    @Unique
+    private static final int C2ME_AQUIFER_HIGH_AIR_MARGIN = 5;
+    @Unique
+    private static final BlockState C2ME_AIR = Blocks.AIR.getDefaultState();
+
     @Shadow
     @Final
     private int startX;
@@ -110,11 +122,32 @@ public abstract class MixinAquiferSamplerImpl {
     @Unique
     private int c2me$dist3;
     @Unique
-    private long c2me$pos1;
+    private int c2me$posIdx1;
     @Unique
-    private long c2me$pos2;
+    private int c2me$posIdx2;
     @Unique
-    private long c2me$pos3;
+    private int c2me$posIdx3;
+
+    @Unique
+    private int c2me$lastGx = Integer.MIN_VALUE;
+    @Unique
+    private int c2me$lastGy;
+    @Unique
+    private int c2me$lastGz;
+    @Unique
+    private final int[] c2me$candidateX = new int[C2ME_AQUIFER_CANDIDATE_COUNT];
+    @Unique
+    private final int[] c2me$candidateY = new int[C2ME_AQUIFER_CANDIDATE_COUNT];
+    @Unique
+    private final int[] c2me$candidateZ = new int[C2ME_AQUIFER_CANDIDATE_COUNT];
+    @Unique
+    private final int[] c2me$candidateIdx = new int[C2ME_AQUIFER_CANDIDATE_COUNT];
+    @Unique
+    private final int[] c2me$candidateDist = new int[C2ME_AQUIFER_CANDIDATE_COUNT];
+    @Unique
+    private boolean c2me$candidateMaxFluidYValid;
+    @Unique
+    private int c2me$candidateMaxFluidY;
 
     @Unique
     private double c2me$mutableDoubleThingy;
@@ -170,6 +203,14 @@ public abstract class MixinAquiferSamplerImpl {
                 this.needsFluidTick = false;
                 return Blocks.LAVA.getDefaultState();
             } else {
+                int highAirY = j - C2ME_AQUIFER_HIGH_AIR_MARGIN;
+                if (highAirY >= fluidLevel.y) {
+                    this.c2me$refreshCandidateSet(i, j, k);
+                    if (highAirY >= this.c2me$getCandidateMaxFluidY()) {
+                        this.needsFluidTick = false;
+                        return C2ME_AIR;
+                    }
+                }
                 aquiferExtracted$refreshDistPosIdx(i, j, k);
                 return aquiferExtracted$applyPost(pos, density, j, i, k);
             }
@@ -178,7 +219,7 @@ public abstract class MixinAquiferSamplerImpl {
 
     @Unique
     private @Nullable BlockState aquiferExtracted$applyPost(DensityFunction.NoisePos pos, double density, int j, int i, int k) {
-        AquiferSampler.FluidLevel fluidLevel2 = this.getWaterLevel(this.c2me$pos1);
+        AquiferSampler.FluidLevel fluidLevel2 = this.c2me$getWaterLevelIndexed(this.c2me$posIdx1);
         double d = maxDistance(this.c2me$dist1, this.c2me$dist2);
         BlockState blockState = fluidLevel2.getBlockState(j);
         if (d <= 0.0) {
@@ -190,12 +231,13 @@ public abstract class MixinAquiferSamplerImpl {
         } else {
 //            MutableDouble mutableDouble = new MutableDouble(Double.NaN); // 234MB/s alloc rate at 480 cps
             this.c2me$mutableDoubleThingy = Double.NaN;
-            AquiferSampler.FluidLevel fluidLevel3 = this.getWaterLevel(this.c2me$pos2);
+            AquiferSampler.FluidLevel fluidLevel3 = this.c2me$getWaterLevelIndexed(this.c2me$posIdx2);
             double e = d * this.c2me$calculateDensityModified(pos, fluidLevel2, fluidLevel3);
             if (density + e > 0.0) {
                 this.needsFluidTick = false;
                 return null;
             } else {
+                this.c2me$refreshThirdDistPosIdx();
                 return aquiferExtracted$getFinalBlockState(pos, density, d, fluidLevel2, fluidLevel3, blockState);
             }
         }
@@ -203,7 +245,7 @@ public abstract class MixinAquiferSamplerImpl {
 
     @Unique
     private BlockState aquiferExtracted$getFinalBlockState(DensityFunction.NoisePos pos, double density, double d, AquiferSampler.FluidLevel fluidLevel2, AquiferSampler.FluidLevel fluidLevel3, BlockState blockState) {
-        AquiferSampler.FluidLevel fluidLevel4 = this.getWaterLevel(this.c2me$pos3);
+        AquiferSampler.FluidLevel fluidLevel4 = this.c2me$getWaterLevelIndexed(this.c2me$posIdx3);
         double f = maxDistance(this.c2me$dist1, this.c2me$dist3);
         if (aquiferExtracted$extractedCheckFG(pos, density, d, fluidLevel2, f, fluidLevel4)) return null;
 
@@ -228,56 +270,142 @@ public abstract class MixinAquiferSamplerImpl {
 
     @Unique
     @NotNull
-    private void aquiferExtracted$refreshDistPosIdx(int x, int y, int z) {
+    private void c2me$refreshCandidateSet(int x, int y, int z) {
         int gx = (x - 5) >> 4;
-        int gy = Math.floorDiv(y + 1, 12);
+        int shiftedY = y + 1;
+        int gy = shiftedY >= 0 ? shiftedY / 12 : (shiftedY - 11) / 12;
         int gz = (z - 5) >> 4;
+        if (gx != this.c2me$lastGx || gy != this.c2me$lastGy || gz != this.c2me$lastGz) {
+            this.c2me$refillCandidates(gx, gy, gz);
+            this.c2me$lastGx = gx;
+            this.c2me$lastGy = gy;
+            this.c2me$lastGz = gz;
+        }
+    }
+
+    @Unique
+    @NotNull
+    private void aquiferExtracted$refreshDistPosIdx(int x, int y, int z) {
+        this.c2me$refreshCandidateSet(x, y, z);
+
         int dist1 = Integer.MAX_VALUE;
         int dist2 = Integer.MAX_VALUE;
-        int dist3 = Integer.MAX_VALUE;
-        long pos1 = 0;
-        long pos2 = 0;
-        long pos3 = 0;
+        int posIdx1 = 0;
+        int posIdx2 = 0;
 
+        for (int i = 0; i < C2ME_AQUIFER_CANDIDATE_COUNT; i++) {
+            int dx = this.c2me$candidateX[i] - x;
+            int dy = this.c2me$candidateY[i] - y;
+            int dz = this.c2me$candidateZ[i] - z;
+            int dist = dx * dx + dy * dy + dz * dz;
+            this.c2me$candidateDist[i] = dist;
+            int posIdx = this.c2me$candidateIdx[i];
+
+            if (dist2 >= dist) {
+                posIdx2 = posIdx;
+                dist2 = dist;
+            }
+            if (dist1 >= dist) {
+                posIdx2 = posIdx1;
+                dist2 = dist1;
+                posIdx1 = posIdx;
+                dist1 = dist;
+            }
+        }
+
+        this.c2me$dist1 = dist1;
+        this.c2me$dist2 = dist2;
+        this.c2me$posIdx1 = posIdx1;
+        this.c2me$posIdx2 = posIdx2;
+    }
+
+    @Unique
+    private void c2me$refillCandidates(int gx, int gy, int gz) {
+        int candidate = 0;
         for (int offY = -1; offY <= 1; ++offY) {
             for (int offZ = 0; offZ <= 1; ++offZ) {
                 for (int offX = 0; offX <= 1; ++offX) {
                     int posIdx = this.index(gx + offX, gy + offY, gz + offZ);
-
                     long position = this.blockPositions[posIdx];
-
-                    int dx = BlockPos.unpackLongX(position) - x;
-                    int dy = BlockPos.unpackLongY(position) - y;
-                    int dz = BlockPos.unpackLongZ(position) - z;
-                    int dist = dx * dx + dy * dy + dz * dz;
-
-                    // unexplainable branch prediction magic
-                    if (dist3 >= dist) {
-                        pos3 = position;
-                        dist3 = dist;
-                    }
-                    if (dist2 >= dist) {
-                        pos3 = pos2;
-                        dist3 = dist2;
-                        pos2 = position;
-                        dist2 = dist;
-                    }
-                    if (dist1 >= dist) {
-                        pos2 = pos1;
-                        dist2 = dist1;
-                        pos1 = position;
-                        dist1 = dist;
-                    }
+                    this.c2me$candidateX[candidate] = BlockPos.unpackLongX(position);
+                    this.c2me$candidateY[candidate] = BlockPos.unpackLongY(position);
+                    this.c2me$candidateZ[candidate] = BlockPos.unpackLongZ(position);
+                    this.c2me$candidateIdx[candidate] = posIdx;
+                    candidate++;
                 }
+            }
+        }
+        this.c2me$candidateMaxFluidYValid = false;
+    }
+
+    @Unique
+    private int c2me$getCandidateMaxFluidY() {
+        if (!this.c2me$candidateMaxFluidYValid) {
+            int maxFluidY = DimensionType.field_35479;
+            for (int i = 0; i < C2ME_AQUIFER_CANDIDATE_COUNT; i++) {
+                int fluidY = this.c2me$getWaterLevelIndexed(this.c2me$candidateIdx[i]).y;
+                if (fluidY > maxFluidY) {
+                    maxFluidY = fluidY;
+                }
+            }
+            this.c2me$candidateMaxFluidY = maxFluidY;
+            this.c2me$candidateMaxFluidYValid = true;
+        }
+        return this.c2me$candidateMaxFluidY;
+    }
+
+    @Unique
+    private void c2me$refreshThirdDistPosIdx() {
+        int dist1 = Integer.MAX_VALUE;
+        int dist2 = Integer.MAX_VALUE;
+        int dist3 = Integer.MAX_VALUE;
+        int posIdx1 = 0;
+        int posIdx2 = 0;
+        int posIdx3 = 0;
+
+        for (int i = 0; i < C2ME_AQUIFER_CANDIDATE_COUNT; i++) {
+            int dist = this.c2me$candidateDist[i];
+            int posIdx = this.c2me$candidateIdx[i];
+
+            if (dist3 >= dist) {
+                posIdx3 = posIdx;
+                dist3 = dist;
+            }
+            if (dist2 >= dist) {
+                posIdx3 = posIdx2;
+                dist3 = dist2;
+                posIdx2 = posIdx;
+                dist2 = dist;
+            }
+            if (dist1 >= dist) {
+                posIdx2 = posIdx1;
+                dist2 = dist1;
+                posIdx1 = posIdx;
+                dist1 = dist;
             }
         }
 
         this.c2me$dist1 = dist1;
         this.c2me$dist2 = dist2;
         this.c2me$dist3 = dist3;
-        this.c2me$pos1 = pos1;
-        this.c2me$pos2 = pos2;
-        this.c2me$pos3 = pos3;
+        this.c2me$posIdx1 = posIdx1;
+        this.c2me$posIdx2 = posIdx2;
+        this.c2me$posIdx3 = posIdx3;
+    }
+
+    @Unique
+    private AquiferSampler.FluidLevel c2me$getWaterLevelIndexed(int index) {
+        AquiferSampler.FluidLevel fluidLevel = this.waterLevels[index];
+        if (fluidLevel != null) {
+            return fluidLevel;
+        }
+        long blockPosition = this.blockPositions[index];
+        int i = BlockPos.unpackLongX(blockPosition);
+        int j = BlockPos.unpackLongY(blockPosition);
+        int k = BlockPos.unpackLongZ(blockPosition);
+        AquiferSampler.FluidLevel fluidLevel2 = this.getFluidLevel(i, j, k);
+        this.waterLevels[index] = fluidLevel2;
+        return fluidLevel2;
     }
 
     /**
