@@ -35,6 +35,7 @@ import com.ishland.c2me.opts.dfc.common.ast.opto.OptoPasses;
 import com.ishland.c2me.opts.dfc.common.gen.GenDumper;
 import com.ishland.c2me.opts.dfc.common.gen.meta.ValuesMethodDefD;
 import com.ishland.c2me.opts.dfc.common.util.ArrayCache;
+import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
 import it.unimi.dsi.fastutil.Hash;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.ints.IntObjectPair;
@@ -313,8 +314,24 @@ public class BytecodeGen {
     }
 
     public static class Context {
-        public static final String SINGLE_DESC = Type.getMethodDescriptor(Type.getType(double.class), Type.getType(int.class), Type.getType(int.class), Type.getType(int.class), Type.getType(EvalType.class));
-        public static final String MULTI_DESC = Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(double[].class), Type.getType(int[].class), Type.getType(int[].class), Type.getType(int[].class), Type.getType(EvalType.class), Type.getType(ArrayCache.class));
+        public static final String SINGLE_DESC = Type.getMethodDescriptor(
+                Type.DOUBLE_TYPE,
+                Type.INT_TYPE,
+                Type.INT_TYPE,
+                Type.INT_TYPE,
+                Type.getType(EvalType.class),
+                Type.getType(NoisePosVanillaInterface.class)
+        );
+        public static final String MULTI_DESC = Type.getMethodDescriptor(
+                Type.VOID_TYPE,
+                Type.getType(double[].class),
+                Type.getType(int[].class),
+                Type.getType(int[].class),
+                Type.getType(int[].class),
+                Type.getType(EvalType.class),
+                Type.getType(ArrayCache.class),
+                Type.getType(NoisePosVanillaInterface.class)
+        );
         public final ClassWriter classWriter;
         public final String className;
         public final String classDesc;
@@ -392,7 +409,7 @@ public class BytecodeGen {
             Label end = new Label();
             adapter.visitLabel(start);
             generator.accept(adapter, (localName, localDesc) -> {
-                int ordinal = extraLocals.size() + 5;
+                int ordinal = extraLocals.size() + 6;
                 extraLocals.add(IntObjectPair.of(ordinal, Pair.of(localName, localDesc)));
                 return ordinal;
             });
@@ -402,6 +419,7 @@ public class BytecodeGen {
             adapter.visitLocalVariable("y", Type.INT_TYPE.getDescriptor(), null, start, end, 2);
             adapter.visitLocalVariable("z", Type.INT_TYPE.getDescriptor(), null, start, end, 3);
             adapter.visitLocalVariable("evalType", Type.getType(EvalType.class).getDescriptor(), null, start, end, 4);
+            adapter.visitLocalVariable("mutablePos", Type.getType(NoisePosVanillaInterface.class).getDescriptor(), null, start, end, 5);
             for (IntObjectPair<Pair<String, String>> local : extraLocals) {
                 adapter.visitLocalVariable(local.right().left(), local.right().right(), null, start, end, local.leftInt());
             }
@@ -451,7 +469,7 @@ public class BytecodeGen {
             Label end = new Label();
             adapter.visitLabel(start);
             generator.accept(adapter, (localName, localDesc) -> {
-                int ordinal = extraLocals.size() + 7;
+                int ordinal = extraLocals.size() + 8;
                 extraLocals.add(IntObjectPair.of(ordinal, Pair.of(localName, localDesc)));
                 return ordinal;
             });
@@ -463,6 +481,7 @@ public class BytecodeGen {
             adapter.visitLocalVariable("z", Type.getType(double[].class).getDescriptor(), null, start, end, 4);
             adapter.visitLocalVariable("evalType", Type.getType(EvalType.class).getDescriptor(), null, start, end, 5);
             adapter.visitLocalVariable("arrayCache", Type.getType(ArrayCache.class).getDescriptor(), null, start, end, 6);
+            adapter.visitLocalVariable("mutablePos", Type.getType(NoisePosVanillaInterface.class).getDescriptor(), null, start, end, 7);
             for (IntObjectPair<Pair<String, String>> local : extraLocals) {
                 adapter.visitLocalVariable(local.right().left(), local.right().right(), null, start, end, local.leftInt());
             }
@@ -486,6 +505,7 @@ public class BytecodeGen {
                 m.load(2, Type.INT_TYPE);
                 m.load(3, Type.INT_TYPE);
                 m.load(4, InstructionAdapter.OBJECT_TYPE);
+                m.load(5, InstructionAdapter.OBJECT_TYPE);
                 m.invokevirtual(this.className, target.generatedMethod(), SINGLE_DESC, false);
             }
         }
@@ -505,6 +525,7 @@ public class BytecodeGen {
                 m.load(indexLocal, Type.INT_TYPE);
                 m.aload(Type.INT_TYPE);
                 m.load(5, InstructionAdapter.OBJECT_TYPE);
+                m.load(7, InstructionAdapter.OBJECT_TYPE);
 
                 m.invokevirtual(
                         this.className,
@@ -532,6 +553,7 @@ public class BytecodeGen {
                 m.load(4, InstructionAdapter.OBJECT_TYPE);
                 m.load(5, InstructionAdapter.OBJECT_TYPE);
                 m.load(6, InstructionAdapter.OBJECT_TYPE);
+                m.load(7, InstructionAdapter.OBJECT_TYPE);
                 m.invokevirtual(this.className, target.generatedMethod(), MULTI_DESC, false);
             }
         }
@@ -620,12 +642,12 @@ public class BytecodeGen {
 
     @FunctionalInterface
     public interface EvalSingleInterface {
-        double evalSingle(int x, int y, int z, EvalType type);
+        double evalSingle(int x, int y, int z, EvalType type, NoisePosVanillaInterface mutablePos);
     }
 
     @FunctionalInterface
     public interface EvalMultiInterface {
-        void evalMulti(double[] res, int[] x, int[] y, int[] z, EvalType type);
+        void evalMulti(double[] res, int[] x, int[] y, int[] z, EvalType type, NoisePosVanillaInterface mutablePos);
     }
 
 }

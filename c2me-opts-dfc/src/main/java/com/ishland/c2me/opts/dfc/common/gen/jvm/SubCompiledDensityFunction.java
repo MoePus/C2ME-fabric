@@ -33,6 +33,7 @@ import com.ishland.c2me.opts.dfc.common.ducks.ICoordinatesFilling;
 import com.ishland.c2me.opts.dfc.common.ducks.IPreloadedCoordinates;
 import com.ishland.c2me.opts.dfc.common.util.ArrayCache;
 import com.ishland.c2me.opts.dfc.common.vif.EachApplierVanillaInterface;
+import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
 import net.minecraft.util.dynamic.CodecHolder;
 import net.minecraft.world.gen.chunk.Blender;
 import net.minecraft.world.gen.chunk.ChunkNoiseSampler;
@@ -81,7 +82,20 @@ public class SubCompiledDensityFunction implements DensityFunction {
                 return fallback.sample(pos);
             }
         }
-        return this.singleMethod.evalSingle(pos.blockX(), pos.blockY(), pos.blockZ(), EvalType.from(pos));
+        int x = pos.blockX();
+        int y = pos.blockY();
+        int z = pos.blockZ();
+        EvalType type = EvalType.from(pos);
+        NoisePosVanillaInterface mutablePos = pos instanceof NoisePosVanillaInterface vif
+                ? vif
+                : new NoisePosVanillaInterface(type);
+        try {
+            return this.singleMethod.evalSingle(x, y, z, type, mutablePos);
+        } finally {
+            if (pos == mutablePos) {
+                mutablePos.set(x, y, z, type);
+            }
+        }
     }
 
     @Override
@@ -97,10 +111,12 @@ public class SubCompiledDensityFunction implements DensityFunction {
             }
         }
         if (applier instanceof EachApplierVanillaInterface vanillaInterface) {
-            this.multiMethod.evalMulti(densities, vanillaInterface.getX(), vanillaInterface.getY(), vanillaInterface.getZ(), EvalType.from(applier), vanillaInterface.c2me$getArrayCache());
+            this.fillFromVanillaInterface(densities, vanillaInterface);
             return;
         }
 
+        EvalType type = EvalType.from(applier);
+        NoisePosVanillaInterface mutablePos = new NoisePosVanillaInterface(type);
         ArrayCache cache = applier instanceof IArrayCacheCapable cacheCapable ? cacheCapable.c2me$getArrayCache() : new ArrayCache();
         int[] x;
         int[] y;
@@ -128,13 +144,34 @@ public class SubCompiledDensityFunction implements DensityFunction {
             allocatedOnDemand = true;
         }
         try {
-            this.multiMethod.evalMulti(densities, x, y, z, EvalType.from(applier), cache);
+            this.multiMethod.evalMulti(densities, x, y, z, type, cache, mutablePos);
         } finally {
             if (allocatedOnDemand) {
                 cache.recycle(x);
                 cache.recycle(y);
                 cache.recycle(z);
             }
+        }
+    }
+
+    private void fillFromVanillaInterface(double[] densities, EachApplierVanillaInterface vanillaInterface) {
+        NoisePosVanillaInterface mutablePos = vanillaInterface.getMutablePos();
+        int x = mutablePos.blockX();
+        int y = mutablePos.blockY();
+        int z = mutablePos.blockZ();
+        EvalType type = mutablePos.getType();
+        try {
+            this.multiMethod.evalMulti(
+                    densities,
+                    vanillaInterface.getX(),
+                    vanillaInterface.getY(),
+                    vanillaInterface.getZ(),
+                    vanillaInterface.getType(),
+                    vanillaInterface.c2me$getArrayCache(),
+                    mutablePos
+            );
+        } finally {
+            mutablePos.set(x, y, z, type);
         }
     }
 

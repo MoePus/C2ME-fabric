@@ -38,22 +38,36 @@ public class EachApplierVanillaInterface implements DensityFunction.EachApplier,
     private final int[] z;
     private final EvalType type;
     private final ArrayCache cache;
+    private final NoisePosVanillaInterface mutablePos;
 
     public EachApplierVanillaInterface(int[] x, int[] y, int[] z, EvalType type) {
-        this(x, y, z, type, new ArrayCache());
+        this(x, y, z, type, new ArrayCache(), new NoisePosVanillaInterface(type));
     }
 
     public EachApplierVanillaInterface(int[] x, int[] y, int[] z, EvalType type, ArrayCache cache) {
+        this(x, y, z, type, cache, new NoisePosVanillaInterface(type));
+    }
+
+    public EachApplierVanillaInterface(
+            int[] x,
+            int[] y,
+            int[] z,
+            EvalType type,
+            ArrayCache cache,
+            NoisePosVanillaInterface mutablePos
+    ) {
         this.x = Objects.requireNonNull(x);
         this.y = Objects.requireNonNull(y);
         this.z = Objects.requireNonNull(z);
         this.type = Objects.requireNonNull(type);
         this.cache = Objects.requireNonNull(cache);
+        this.mutablePos = Objects.requireNonNull(mutablePos);
     }
 
     @Override
     public DensityFunction.NoisePos at(int index) {
-        return new NoisePosVanillaInterface(x[index], y[index], z[index], type);
+        this.mutablePos.set(x[index], y[index], z[index], type);
+        return this.mutablePos;
     }
 
     @Override
@@ -77,6 +91,10 @@ public class EachApplierVanillaInterface implements DensityFunction.EachApplier,
 
     public EvalType getType() {
         return type;
+    }
+
+    public NoisePosVanillaInterface getMutablePos() {
+        return mutablePos;
     }
 
     @Override

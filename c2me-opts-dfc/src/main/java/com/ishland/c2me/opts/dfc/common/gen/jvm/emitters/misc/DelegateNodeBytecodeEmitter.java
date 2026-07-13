@@ -49,28 +49,18 @@ public class DelegateNodeBytecodeEmitter<E extends DelegateNode> implements Byte
 
     @Override
     public void doBytecodeGenSingle(DelegateNode node, BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
-        String newField = context.newField(DensityFunction.class, node.getDelegate());
+        String delegateField = context.newField(DensityFunction.class, node.getDelegate());
+        setMutablePosSingle(m);
         m.load(0, InstructionAdapter.OBJECT_TYPE);
-        m.getfield(context.className, newField, Type.getDescriptor(DensityFunction.class));
-        m.anew(Type.getType(NoisePosVanillaInterface.class));
-        m.dup();
-        m.load(1, Type.INT_TYPE);
-        m.load(2, Type.INT_TYPE);
-        m.load(3, Type.INT_TYPE);
-        m.load(4, InstructionAdapter.OBJECT_TYPE);
-        m.invokespecial(Type.getInternalName(NoisePosVanillaInterface.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.getType(EvalType.class)), false);
-        m.invokestatic(
-                Type.getInternalName(InvocationShim.class),
-                "invokeDensityFunctionSample",
-                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.class), Type.getType(DensityFunction.NoisePos.class)),
-                false
-        );
+        m.getfield(context.className, delegateField, Type.getDescriptor(DensityFunction.class));
+        m.load(5, InstructionAdapter.OBJECT_TYPE);
+        invokeDensityFunctionSample(m);
         m.areturn(Type.DOUBLE_TYPE);
     }
 
     @Override
     public void doBytecodeGenMulti(DelegateNode node, BytecodeGen.Context context, InstructionAdapter m, BytecodeGen.Context.LocalVarConsumer localVarConsumer) {
-        String newField = context.newField(DensityFunction.class, node.getDelegate());
+        String delegateField = context.newField(DensityFunction.class, node.getDelegate());
 
         Label moreThanTwoLabel = new Label();
 
@@ -79,30 +69,14 @@ public class DelegateNodeBytecodeEmitter<E extends DelegateNode> implements Byte
         m.iconst(1);
         m.ificmpgt(moreThanTwoLabel);
 
+        setMutablePosMulti(m);
         m.load(1, InstructionAdapter.OBJECT_TYPE);
         m.iconst(0);
 
         m.load(0, InstructionAdapter.OBJECT_TYPE);
-        m.getfield(context.className, newField, Type.getDescriptor(DensityFunction.class));
-        m.anew(Type.getType(NoisePosVanillaInterface.class));
-        m.dup();
-        m.load(2, InstructionAdapter.OBJECT_TYPE);
-        m.iconst(0);
-        m.aload(Type.INT_TYPE);
-        m.load(3, InstructionAdapter.OBJECT_TYPE);
-        m.iconst(0);
-        m.aload(Type.INT_TYPE);
-        m.load(4, InstructionAdapter.OBJECT_TYPE);
-        m.iconst(0);
-        m.aload(Type.INT_TYPE);
-        m.load(5, InstructionAdapter.OBJECT_TYPE);
-        m.invokespecial(Type.getInternalName(NoisePosVanillaInterface.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.getType(EvalType.class)), false);
-        m.invokestatic(
-                Type.getInternalName(InvocationShim.class),
-                "invokeDensityFunctionSample",
-                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.class), Type.getType(DensityFunction.NoisePos.class)),
-                false
-        );
+        m.getfield(context.className, delegateField, Type.getDescriptor(DensityFunction.class));
+        m.load(7, InstructionAdapter.OBJECT_TYPE);
+        invokeDensityFunctionSample(m);
 
         m.astore(Type.DOUBLE_TYPE);
         m.areturn(Type.VOID_TYPE);
@@ -110,7 +84,7 @@ public class DelegateNodeBytecodeEmitter<E extends DelegateNode> implements Byte
         m.visitLabel(moreThanTwoLabel);
 
         m.load(0, InstructionAdapter.OBJECT_TYPE);
-        m.getfield(context.className, newField, Type.getDescriptor(DensityFunction.class));
+        m.getfield(context.className, delegateField, Type.getDescriptor(DensityFunction.class));
         m.load(1, InstructionAdapter.OBJECT_TYPE);
         m.anew(Type.getType(EachApplierVanillaInterface.class));
         m.dup();
@@ -119,7 +93,21 @@ public class DelegateNodeBytecodeEmitter<E extends DelegateNode> implements Byte
         m.load(4, InstructionAdapter.OBJECT_TYPE);
         m.load(5, InstructionAdapter.OBJECT_TYPE);
         m.load(6, InstructionAdapter.OBJECT_TYPE);
-        m.invokespecial(Type.getInternalName(EachApplierVanillaInterface.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(int[].class), Type.getType(int[].class), Type.getType(int[].class), Type.getType(EvalType.class), Type.getType(ArrayCache.class)), false);
+        m.load(7, InstructionAdapter.OBJECT_TYPE);
+        m.invokespecial(
+                Type.getInternalName(EachApplierVanillaInterface.class),
+                "<init>",
+                Type.getMethodDescriptor(
+                        Type.VOID_TYPE,
+                        Type.getType(int[].class),
+                        Type.getType(int[].class),
+                        Type.getType(int[].class),
+                        Type.getType(EvalType.class),
+                        Type.getType(ArrayCache.class),
+                        Type.getType(NoisePosVanillaInterface.class)
+                ),
+                false
+        );
         m.invokestatic(
                 Type.getInternalName(InvocationShim.class),
                 "invokeDensityFunctionFill",
@@ -127,5 +115,43 @@ public class DelegateNodeBytecodeEmitter<E extends DelegateNode> implements Byte
                 false
         );
         m.areturn(Type.VOID_TYPE);
+    }
+
+    private static void setMutablePosSingle(InstructionAdapter m) {
+        m.load(5, InstructionAdapter.OBJECT_TYPE);
+        m.load(1, Type.INT_TYPE);
+        m.load(2, Type.INT_TYPE);
+        m.load(3, Type.INT_TYPE);
+        m.load(4, InstructionAdapter.OBJECT_TYPE);
+        invokeMutablePosSet(m);
+    }
+
+    private static void setMutablePosMulti(InstructionAdapter m) {
+        m.load(7, InstructionAdapter.OBJECT_TYPE);
+        for (int coordinateLocal = 2; coordinateLocal <= 4; coordinateLocal++) {
+            m.load(coordinateLocal, InstructionAdapter.OBJECT_TYPE);
+            m.iconst(0);
+            m.aload(Type.INT_TYPE);
+        }
+        m.load(5, InstructionAdapter.OBJECT_TYPE);
+        invokeMutablePosSet(m);
+    }
+
+    private static void invokeMutablePosSet(InstructionAdapter m) {
+        m.invokevirtual(
+                Type.getInternalName(NoisePosVanillaInterface.class),
+                "set",
+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE, Type.getType(EvalType.class)),
+                false
+        );
+    }
+
+    private static void invokeDensityFunctionSample(InstructionAdapter m) {
+        m.invokestatic(
+                Type.getInternalName(InvocationShim.class),
+                "invokeDensityFunctionSample",
+                Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.getType(DensityFunction.class), Type.getType(DensityFunction.NoisePos.class)),
+                false
+        );
     }
 }

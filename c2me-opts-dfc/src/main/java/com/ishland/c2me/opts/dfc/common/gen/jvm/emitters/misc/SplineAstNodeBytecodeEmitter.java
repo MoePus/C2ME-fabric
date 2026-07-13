@@ -33,6 +33,7 @@ import com.ishland.c2me.opts.dfc.common.gen.jvm.InvocationShim;
 import com.ishland.c2me.opts.dfc.common.gen.jvm.SplineSupport;
 import com.ishland.c2me.opts.dfc.common.gen.meta.ValuesMethodDefD;
 import com.ishland.c2me.opts.dfc.common.gen.meta.ValuesMethodDefF;
+import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
 import com.ishland.flowsched.util.Assertions;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.ints.IntObjectPair;
@@ -50,8 +51,23 @@ import java.util.List;
 public class SplineAstNodeBytecodeEmitter implements BytecodeEmitter<SplineAstNode> {
     public static final SplineAstNodeBytecodeEmitter INSTANCE = new SplineAstNodeBytecodeEmitter();
 
-    public static final String SPLINE_METHOD_DESC = Type.getMethodDescriptor(Type.getType(float.class), Type.getType(int.class), Type.getType(int.class), Type.getType(int.class), Type.getType(EvalType.class));
-    public static final String SPLINE_METHOD_DESC_CACHE1 = Type.getMethodDescriptor(Type.getType(float.class), Type.getType(int.class), Type.getType(int.class), Type.getType(int.class), Type.getType(EvalType.class), Type.getType(float.class));
+    public static final String SPLINE_METHOD_DESC = Type.getMethodDescriptor(
+            Type.FLOAT_TYPE,
+            Type.INT_TYPE,
+            Type.INT_TYPE,
+            Type.INT_TYPE,
+            Type.getType(EvalType.class),
+            Type.getType(NoisePosVanillaInterface.class)
+    );
+    public static final String SPLINE_METHOD_DESC_CACHE1 = Type.getMethodDescriptor(
+            Type.FLOAT_TYPE,
+            Type.INT_TYPE,
+            Type.INT_TYPE,
+            Type.INT_TYPE,
+            Type.getType(EvalType.class),
+            Type.getType(NoisePosVanillaInterface.class),
+            Type.FLOAT_TYPE
+    );
 
     private SplineAstNodeBytecodeEmitter() {
     }
@@ -95,7 +111,7 @@ public class SplineAstNodeBytecodeEmitter implements BytecodeEmitter<SplineAstNo
         Label end = new Label();
         m.visitLabel(start);
         BytecodeGen.Context.LocalVarConsumer localVarConsumer = (localName, localDesc) -> {
-            int ordinal = extraLocals.size() + (cache1 ? 6 : 5);
+            int ordinal = extraLocals.size() + (cache1 ? 7 : 6);
             extraLocals.add(IntObjectPair.of(ordinal, Pair.of(localName, localDesc)));
             return ordinal;
         };
@@ -108,7 +124,7 @@ public class SplineAstNodeBytecodeEmitter implements BytecodeEmitter<SplineAstNo
             String locations = context.newField(float[].class, impl.locations());
             String derivatives = context.newField(float[].class, impl.derivatives());
 
-            int point = cache1 ? 5 : localVarConsumer.createLocalVariable("point", Type.FLOAT_TYPE.getDescriptor());
+            int point = cache1 ? 6 : localVarConsumer.createLocalVariable("point", Type.FLOAT_TYPE.getDescriptor());
             int rangeForLocation = localVarConsumer.createLocalVariable("rangeForLocation", Type.INT_TYPE.getDescriptor());
 
             int lastConst = impl.locations().length - 1;
@@ -405,8 +421,9 @@ public class SplineAstNodeBytecodeEmitter implements BytecodeEmitter<SplineAstNo
         m.visitLocalVariable("y", Type.INT_TYPE.getDescriptor(), null, start, end, 2);
         m.visitLocalVariable("z", Type.INT_TYPE.getDescriptor(), null, start, end, 3);
         m.visitLocalVariable("evalType", Type.getType(EvalType.class).getDescriptor(), null, start, end, 4);
+        m.visitLocalVariable("mutablePos", Type.getType(NoisePosVanillaInterface.class).getDescriptor(), null, start, end, 5);
         if (cache1) {
-            m.visitLocalVariable("pointCached", Type.FLOAT_TYPE.getDescriptor(), null, start, end, 5);
+            m.visitLocalVariable("pointCached", Type.FLOAT_TYPE.getDescriptor(), null, start, end, 6);
         }
         for (IntObjectPair<Pair<String, String>> local : extraLocals) {
             m.visitLocalVariable(local.right().left(), local.right().right(), null, start, end, local.leftInt());
@@ -428,6 +445,7 @@ public class SplineAstNodeBytecodeEmitter implements BytecodeEmitter<SplineAstNo
             m.load(2, Type.INT_TYPE);
             m.load(3, Type.INT_TYPE);
             m.load(4, InstructionAdapter.OBJECT_TYPE);
+            m.load(5, InstructionAdapter.OBJECT_TYPE);
             if (doCache1) {
                 m.load(cache1Local, Type.FLOAT_TYPE);
             }

@@ -25,6 +25,7 @@
 package com.ishland.c2me.opts.dfc.common.ast;
 
 import com.ishland.c2me.opts.dfc.common.vif.EachApplierVanillaInterface;
+import com.ishland.c2me.opts.dfc.common.vif.NoisePosVanillaInterface;
 import net.minecraft.world.gen.chunk.ChunkNoiseSampler;
 import net.minecraft.world.gen.densityfunction.DensityFunction;
 
@@ -32,6 +33,9 @@ public enum EvalType {
     NORMAL, INTERPOLATION;
 
     public static EvalType from(DensityFunction.NoisePos pos) {
+        if (pos instanceof NoisePosVanillaInterface vif) {
+            return vif.getType();
+        }
         return pos instanceof ChunkNoiseSampler ? INTERPOLATION : NORMAL;
     }
 
