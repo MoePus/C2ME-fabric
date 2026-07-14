@@ -42,7 +42,7 @@ import it.unimi.dsi.fastutil.objects.Object2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceMaps;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenCustomHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
-import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import net.minecraft.util.math.Spline;
@@ -191,7 +191,7 @@ public class BytecodeGen {
             m.putfield(context.className, name, Type.getDescriptor(type));
         }
 
-        for (String postProcessingMethod : context.postProcessMethods.stream().sorted().toList()) {
+        for (String postProcessingMethod : context.postProcessMethods) {
             m.load(0, InstructionAdapter.OBJECT_TYPE);
             m.invokevirtual(context.className, postProcessingMethod, "()V", false);
         }
@@ -323,7 +323,7 @@ public class BytecodeGen {
         private final Object2ReferenceOpenHashMap<AstNode, String> multiMethods = new Object2ReferenceOpenHashMap<>();
         private final Object2ReferenceOpenHashMap<Spline<DensityFunctionTypes.Spline.DensityFunctionWrapper>, String> splineMethods = new Object2ReferenceOpenHashMap<>();
         private final Object2ReferenceOpenHashMap<Spline<DensityFunctionTypes.Spline.DensityFunctionWrapper>, String> splineMethodsCache1 = new Object2ReferenceOpenHashMap<>();
-        private final ObjectOpenHashSet<String> postProcessMethods = new ObjectOpenHashSet<>();
+        private final ObjectLinkedOpenHashSet<String> postProcessMethods = new ObjectLinkedOpenHashSet<>();
         private final Reference2ObjectOpenHashMap<Object, FieldRecord> args = new Reference2ObjectOpenHashMap<>();
 
         public Context(ClassWriter classWriter, String className) {
